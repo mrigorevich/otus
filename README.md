@@ -1,53 +1,56 @@
 # otus
-Обновление ядра системы
+Работа с mdadm
 
-1. 
-<img width="553" height="398" alt="image" src="https://github.com/user-attachments/assets/43fd856d-f954-4fc8-885e-8e22bca611d8" />
+Задание:
 
-2. Обновляем ядро на последнюю версию из mainlne репозитория:  
-   `mkdir kernel && cd kerne`  
-   `wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-headers-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb`  
-   `wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-headers-7.1.2-070102_7.1.2-070102.202606271039_all.deb`  
-   `wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-image-unsigned-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb`  
-   `wget https://kernel.ubuntu.com/mainline/v7.1.2/amd64/linux-modules-7.1.2-070102-generic_7.1.2-070102.202606271039_amd64.deb`  
-   `sudo dpkg -i *.deb`  
-   <img width="599" height="343" alt="image" src="https://github.com/user-attachments/assets/1c4db424-503e-4b62-8930-4ff5bc1421a1" />
-
-   Устанавливаем в загрузку по умолчанию:  
-   `sudo update-grub`  
-   `sudo grub-set-default 0`  
-   `sudo reboot`  
-   <img width="465" height="306" alt="image" src="https://github.com/user-attachments/assets/f0c68fcd-058d-406f-b470-9faa9ef4a511" />
-   
-==================================================================================================================================  
-
-  Собрать ядро самостоятельно из исходных кодов.  
-1.	Начальное состояние и предварительные процедуры.  
- <img width="368" height="63" alt="image" src="https://github.com/user-attachments/assets/2e898855-6cc9-4301-9ac9-1091bdc01960" />  
-
-
-`mkdir kernel && cd kernel`  
-`wget https://cdn.kernel.org/pub/linux/kernel/v7.x/linux-7.1.2.tar.xz`  
-`tar -xf linux-7.1.2.tar.xz` # качаем и распаковываем исходники  
-`sudo apt install build-essential libncurses-dev bison flex libssl-dev libelf-dev dwarves bc` # устанавливаем зависимости  
-`cd linux-7.1.2`  
+• Добавьте в виртуальную машину несколько дисков  
+• Соберите RAID-0/1/5/10 на выбор  
+• Сломайте и почините RAID  
+• Создайте GPT таблицу, пять разделов и смонтируйте их в системе.  
+<br>
+1. Добавляем в гипервизоре 3 диска по 5гб.
+<img width="974" height="358" alt="image" src="https://github.com/user-attachments/assets/4d95e685-8915-430c-a847-a7f77cc4fa6b" />
   
-2.	Конфигурация и сборка.  
-`sudo make localmodconfig` # на этом этапе все опции оставил по умолчанию  
-`sudo nano .config` # удаляем дефолтные ключи из конфига:  
-   <img width="476" height="242" alt="image" src="https://github.com/user-attachments/assets/b32a3228-1405-40ea-9e6e-dce44780ad20" />  
+<br>
+<br>
+2. Соберем RAID1 из дисков sdb и sdc
 
-`sudo make -j2` # собираем ядро в два потока (по числу ядер на ВМ)  
- здесь для ускорения можно было отключить лишние группы драйверов через make menuconfig  
-   
-<img width="529" height="145" alt="image" src="https://github.com/user-attachments/assets/b07ceff3-dc1f-4f3d-96e3-dc0cdfac8f23" />
+`sudo mdadm --create /dev/md127 -l 1 -n 2 /dev/sd{b,c}`  
+`sudo mdadm -D /dev/md127`  
   
-3.	Установка.  
-`sudo make modules_install` # установка модулей  
-`sudo make install` # установка ядра  
-`sudo update-grub`  
-`sudo reboot`  
+<img width="974" height="792" alt="image" src="https://github.com/user-attachments/assets/e6be4f37-9aef-4988-9700-7d185e360cbc" />  
+<br>  
+<br>  
+3. Сломаем RAID, удалив диск sdb в гипервизоре. Имеем следующую картину:  
+<br>
+<img width="974" height="1093" alt="image" src="https://github.com/user-attachments/assets/0ee623d3-c47c-4adc-8245-970271afd331" /><br>  
+  
+Добавим имеющийся свободный диск в RAID  
+`sudo mdadm /dev/md127 --add /dev/sdd`  
+После окончания resync RAID починился:  
+<br>
+<img width="974" height="799" alt="image" src="https://github.com/user-attachments/assets/f675a8e0-8e46-48c8-8e55-0cf7837afe37" />  
 
-     <img width="421" height="165" alt="image" src="https://github.com/user-attachments/assets/0153eb5e-fed8-4ff7-b220-94d8adc5c8d0" />  
+  
+4. Создаем разметку на новом диске:  
+`sudo fdisk /dev/md127`  
+`g` #создаем новую таблицу разделов GPT  
+Создаем 5 разделов по алгоритму:  
+`n`  
+`default`  
+`default`  
+`+1G`  
+`w` #записываем созданные разделы на диск  
+`lsblk`  
+<img width="905" height="483" alt="image" src="https://github.com/user-attachments/assets/de7d21dc-b07b-4c83-8849-e75ffbd4c0e8" />  
 
- 
+
+Создаем файловую систему:  
+`for i in $(seq 1 5); do sudo mkfs.ext4 /dev/md127p$i; done`  
+Монтируем:  
+`sudo mkdir -p /mnt/raid_part{1,2,3,4,5}`  
+`for i in $(seq 1 5); do sudo mount /dev/md127p$i /mnt/raid_part$i; done`  
+`df -h`  
+
+<img width="974" height="340" alt="image" src="https://github.com/user-attachments/assets/6f345e61-95f7-4b71-b181-b73b7f3b8807" />
+  
