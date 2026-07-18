@@ -1,110 +1,81 @@
 # otus
+Начальная ситуация<br><br>
+<img width="974" height="277" alt="image" src="https://github.com/user-attachments/assets/3b6d6078-2157-4470-94eb-c00723662d55" />
 <br><br>
-Начальная ситуация <br><br>
-<img width="974" height="300" alt="image" src="https://github.com/user-attachments/assets/c6e6ba53-2a34-43fc-b4cc-40b4a2eb3fb8" />
-
- 
-
-1.	Уменьшить том под / до 8G.
-
-Соберем временный том для / <br>
-`pvcreate /dev/sdb /dev/sdc`<br>
-`vgcreate root-vg /dev/sdb /dev/sdc`<br>
-`lvcreate -L 8G -n lv-root root-vg`<br>
-`mkfs.ext4 /dev/root-vg/lv-root`<br>
-`mkdir /mnt/root-tmp && mount /dev/root-vg/lv-root /mnt/root-tmp`<br><br>
-Копируем / в новый каталог:<br>
-`rsync -avxHAX --progress / /mnt/root-tmp/`  #ключом x исключаем копирование «лишнего», как каталога назначения, так и виртуальные системные каталоги.<br><br>
-Проверяем что скопировалось:<br>
-<img width="974" height="834" alt="image" src="https://github.com/user-attachments/assets/44c0ece8-7f83-4fb5-8b26-7cea0d6e6ac2" /><br><br>
+1.	Определить алгоритм с наилучшим сжатием:<br>
+•	определить, какие алгоритмы сжатия поддерживает zfs (gzip, zle, lzjb, lz4);<br>
+•	создать 4 файловых системы, на каждой применить свой алгоритм сжатия;<br>
+•	для сжатия использовать либо текстовый файл, либо группу файлов.<br><br>
 
 
-Конфигурируем GRUB:<br>
-`for i in /proc/ /sys/ /dev/ /run/ /boot/; \
- do mount --bind $i /mnt/root-tmp/$i; done`<br>
-`chroot /mnt/root-tmp/`<br>
-`grub-mkconfig -o /boot/grub/grub.cfg`<br>
-`update-initramfs -u`<br>
-`exit`<br>
-`reboot`<br><br>
- <img width="974" height="368" alt="image" src="https://github.com/user-attachments/assets/7c4f6c1c-18d5-4ed4-93b7-a21cb130c715" />
+`apt install zfsutils-linux` #устанавливаем утилиты ZFS<br>
+`zpool create otusdz sdb` #создаем пул<br><br>
+Создаем 4 фс с разным типом сжатия:<br>
+`zfs create -o compression=lz4 otusdz/part_lz4`<br>
+`zfs create -o compression=lzjb otusdz/part_lzjb`<br>
+`zfs create -o compression=zle otusdz/part_zle`<br>
+`zfs create -o compression=gzip otusdz/part_gzip`<br><br>
+<img width="974" height="160" alt="image" src="https://github.com/user-attachments/assets/36e7b767-75ed-4f9a-b894-459bdeab5539" />
 <br><br>
-
-Уменьшаем раздел ubuntu-lv до 8Gb:<br>
-`e2fsck -f /dev/ubuntu-vg/ubuntu-lv`<br>
-`resize2fs /dev/ubuntu-vg/ubuntu-lv 8G`<br>
-`lvreduce /dev/ubuntu-vg/ubuntu-lv -L 8G`<br><br>
-Копируем / обратно на старый раздел:<br>
-`mount /dev/ubuntu-vg/ubuntu-lv /mnt/root-tmp`<br>
-`rsync -avxHAX --progress / /mnt/root-tmp/`<br><br>
-Конфигурируем GRUB:<br>
-`for i in /proc/ /sys/ /dev/ /run/ /boot/; \
- do mount --bind $i /mnt/root-tmp/$i; done`<br>
-`chroot /mnt/root-tmp/`<br>
-`grub-mkconfig -o /boot/grub/grub.cfg`<br>
-`update-initramfs -u`<br>
-`exit`<br>
-`reboot`<br><br>
-Проверяем:<br>
-<img width="974" height="344" alt="image" src="https://github.com/user-attachments/assets/c4b2c52e-aace-4159-9432-3ca6c279393a" />
-
-
-2.	Выделить том под /home.<br><br>
-
-`lvremove /dev/root-vg/lv-root`<br>
-`lvcreate -n lv-home -L 2G /dev/root-vg`<br>
-`mkfs.ext4 /dev/root-vg/lv-home`<br>
-`mkdir /mnt/home && mount /dev/root-vg/lv-home /mnt/home`<br>
-`cp -aR /home/* /mnt/home/`<br>
-`rm -rf /home/*`<br>
-`umount /mnt/home`<br>
-`mount /dev/root-vg/lv-home /home/`<br>
-`echo "/dev/root-vg/lv-home /home ext4 defaults 0 2" >> /etc/fstab` #автомонтирование в fstab<br>
-`reboot`<br><br>
-<img width="974" height="311" alt="image" src="https://github.com/user-attachments/assets/afe0a5d4-c298-4f42-a142-b16aacd0f1e8" /><br><br>
-
-
-
-3.	Выделить том под /var - сделать в mirror.<br><br>
-
-`lvcreate -L 1G -m1 -n lv-var root-vg` #делаем raid1 lv-var<br>
-`mkfs.ext4 /dev/root-vg/lv-var`<br>
-`mkdir /mnt/var && mount /dev/root-vg/lv-var /mnt/var`<br>
-`cp -aR /var/* /mnt/var/` # после этого делаем снэпшот на гипервизоре <br>
-`rm -rf /var/*`<br>
-`umount /mnt/var`<br>
-`mount /dev/root-vg/lv-var /var`<br>
-`echo "/dev/root-vg/lv-var /var ext4 defaults 0 2" >> /etc/fstab` #автомонтирование в fstab<br>
-`reboot`<br><br>
-<img width="974" height="528" alt="image" src="https://github.com/user-attachments/assets/468c2555-cdeb-4c8a-b539-9f93ea70ec35" />
+Скопируем данные в созданные ФС:<br>
+`cp -r /var/log /otusdz/part_gzip/`<br>
+`cp -r /var/log /otusdz/part_zle/`<br>
+`cp -r /var/log /otusdz/part_lzjb/`<br>
+`cp -r /var/log /otusdz/part_lz4/`<br>
+`zfs list` #проверяем<br><br>
+<img width="974" height="235" alt="image" src="https://github.com/user-attachments/assets/906b88f2-d761-4738-a2c7-debac6989d82" />
 <br><br>
-
-
-4.	/home - сделать том для снапшотов.<br><br>
-
-`lvcreate -L 100M -s -n home-snap /dev/root-vg/lv-home`<br><br>
-
-5.	Прописать монтирование в fstab.<br><br>
-Сделано в п.2 и 3.<br><br>
-<!-- AI используют для проверки ДЗ? -->
-6.	Работа со снапшотами:<br>
-•	сгенерить файлы в /home/;<br>
-•	снять снапшот;<br>
-•	удалить часть файлов;<br>
-•	восстановиться со снапшота.<br><br>
-
-`umount /mnt/snap && lvremove /dev/root-vg/home-snap` #удалим предыдущий снэпшот<br>
-`touch /home/file{1..10}`<br>
-`lvcreate -L 100M -s -n home-snap /dev/root-vg/lv-home`<br>
-`rm /home/file1*`<br><br>
-<img width="974" height="69" alt="image" src="https://github.com/user-attachments/assets/46f78a61-223e-41b9-b401-9d381805706a" />
+На наборе текстовых файлов делаем вывод, что алгоритм с наилучшим сжатием – gzip<br>
+`zfs get all | grep compressratio | grep -v ref`<br><br>
+<img width="814" height="177" alt="image" src="https://github.com/user-attachments/assets/0cf4f855-aaa4-435f-8491-1cf6940b4003" />
 <br><br>
-
-`umount -l /home` #лениво отмонтируем /home
+__________________________________________________________________________________________________________________________________ 
 <br>
-`lvconvert --merge /dev/root-vg/home-snap`<br>
-`reboot`<br>
-Файлы восстановлены:
-<br><br> 
-<img width="974" height="51" alt="image" src="https://github.com/user-attachments/assets/7ce166bb-c6cc-4bc1-b307-07d031a4b8a6" />
+2.	Определить настройки пула.<br>
+С помощью команды zfs import собрать pool ZFS.<br>
+Командами zfs определить настройки:<br>
+•	размер хранилища;<br>
+•	тип pool;<br>
+•	значение recordsize;<br>
+•	какое сжатие используется;<br>
+•	какая контрольная сумма используется.<br><br><br>
 
+
+Начальная ситуация:<br><br>
+<img width="974" height="396" alt="image" src="https://github.com/user-attachments/assets/526a9d50-7b0e-4735-b419-edb56438bb98" />
+<br><br> 
+`wget -O archive.tar.gz --no-check-certificate ‘https://drive.usercontent.google.com/download?id=1MvrcEp-WgAQe57aDEzxSRalPAwbNN1Bb&export=download'` #скачиваем предлагаемый архив<br>
+`tar -xzvf archive.tar.gz` #разархивируем<br>
+`zpool import -d zpoolexport`<br>
+`zpool import -d zpoolexport/ otus` #импортируем пул<br><br>
+Определяем:<br><br>
+Размер хранилища:<br>
+<img width="661" height="108" alt="image" src="https://github.com/user-attachments/assets/21dad3c1-f5fa-4488-9b9a-04b08666e1f2" />
+<br><br>
+Тип pool:<br>
+<img width="974" height="460" alt="image" src="https://github.com/user-attachments/assets/935965b1-1bbc-4c1c-8b06-463b0ec2c3d0" />
+<br><br> 
+Значение recordsize:<br>
+<img width="672" height="111" alt="image" src="https://github.com/user-attachments/assets/f5db7eb4-fe89-492b-bd2b-cf136f95b8bc" />
+<br><br>
+Какое сжатие используется:<br>
+<img width="728" height="105" alt="image" src="https://github.com/user-attachments/assets/15bbf1df-c64b-494e-ac80-de756b53a24c" />
+<br><br>
+Какая контрольная сумма используется:<br>
+<img width="639" height="111" alt="image" src="https://github.com/user-attachments/assets/ca5ad25e-b874-4fab-aaa0-a22efb6f1c7d" />
+<br><br>
+________________________________________________________________________________________________________________________________________________________________________________________
+<br>
+3.	Работа со снапшотами:<br>
+•	скопировать файл из удаленной директории;<br>
+•	восстановить файл локально. zfs receive;<br>
+•	найти зашифрованное сообщение в файле secret_message.<br><br>
+
+
+`wget -O otus_task2.file --no-check-certificate 'https://drive.usercontent.google.com/download?id=1wgxjih8YZ-cqLqaZVa0lA3h3Y029c3oI&export=download'` #скачаем предлагаемый файл<br>
+`zfs receive otus/test@today < otus_task2.file` #восстанавливаем ФС из скачанного файла<br><br>
+<img width="974" height="34" alt="image" src="https://github.com/user-attachments/assets/34db6b76-7ac8-4eb7-bec5-d16ac775a16c" />
+<br><br>
+` find /otus/ -name "secret_message"` #ищем файл<br>
+` cat /otus/test/task1/file_mess/secret_message` <br><br>
+<img width="974" height="78" alt="image" src="https://github.com/user-attachments/assets/5c871c2b-ca86-437c-8d76-893674634397" />
