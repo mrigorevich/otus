@@ -1,81 +1,55 @@
 # otus
-Начальная ситуация<br><br>
-<img width="974" height="277" alt="image" src="https://github.com/user-attachments/assets/3b6d6078-2157-4470-94eb-c00723662d55" />
-<br><br>
-1.	Определить алгоритм с наилучшим сжатием:<br>
-•	определить, какие алгоритмы сжатия поддерживает zfs (gzip, zle, lzjb, lz4);<br>
-•	создать 4 файловых системы, на каждой применить свой алгоритм сжатия;<br>
-•	для сжатия использовать либо текстовый файл, либо группу файлов.<br><br>
+Описание домашнего задания:<br>
+•	запустить 2 виртуальных машины (сервер NFS и клиента);<br>
+•	на сервере NFS должна быть подготовлена и экспортирована директория;<br>
+•	в экспортированной директории должна быть поддиректория с именем upload с правами на запись в неё;<br>
+•	экспортированная директория должна автоматически монтироваться на клиенте при старте виртуальной машины (systemd, autofs или fstab — любым способом);<br>
+•	монтирование и работа NFS на клиенте должна быть организована с использованием NFSv3.<br><br>
+_____________________________________________________________________________________________________________________________________________<br><br>
 
+1.	запустить 2 виртуальных машины (сервер NFS и клиента)<br><br>
+Запущены ВМ: otushw (192.168.216.129) и otusclient (192.168.216.128). Обе ВМ на Ubuntu 24.04<br><br>
+2.	на сервере NFS должна быть подготовлена и экспортирована директория. в экспортированной директории должна быть поддиректория с именем upload с правами на запись в неё.<br><br>
+`apt update && apt install nfs-kernel-server` #устанавливаем NFS сервер<br>
+`ss -tlnp` #проверяем запущен ли сервер по tcp:<br><br>
+<img width="974" height="147" alt="image" src="https://github.com/user-attachments/assets/cbc9edf4-863b-4b8a-bdda-68b4e183bd48" /><br><br>
 
-`apt install zfsutils-linux` #устанавливаем утилиты ZFS<br>
-`zpool create otusdz sdb` #создаем пул<br><br>
-Создаем 4 фс с разным типом сжатия:<br>
-`zfs create -o compression=lz4 otusdz/part_lz4`<br>
-`zfs create -o compression=lzjb otusdz/part_lzjb`<br>
-`zfs create -o compression=zle otusdz/part_zle`<br>
-`zfs create -o compression=gzip otusdz/part_gzip`<br><br>
-<img width="974" height="160" alt="image" src="https://github.com/user-attachments/assets/36e7b767-75ed-4f9a-b894-459bdeab5539" />
-<br><br>
-Скопируем данные в созданные ФС:<br>
-`cp -r /var/log /otusdz/part_gzip/`<br>
-`cp -r /var/log /otusdz/part_zle/`<br>
-`cp -r /var/log /otusdz/part_lzjb/`<br>
-`cp -r /var/log /otusdz/part_lz4/`<br>
-`zfs list` #проверяем<br><br>
-<img width="974" height="235" alt="image" src="https://github.com/user-attachments/assets/906b88f2-d761-4738-a2c7-debac6989d82" />
-<br><br>
-На наборе текстовых файлов делаем вывод, что алгоритм с наилучшим сжатием – gzip<br>
-`zfs get all | grep compressratio | grep -v ref`<br><br>
-<img width="814" height="177" alt="image" src="https://github.com/user-attachments/assets/0cf4f855-aaa4-435f-8491-1cf6940b4003" />
-<br><br>
-__________________________________________________________________________________________________________________________________ 
-<br>
-2.	Определить настройки пула.<br>
-С помощью команды zfs import собрать pool ZFS.<br>
-Командами zfs определить настройки:<br>
-•	размер хранилища;<br>
-•	тип pool;<br>
-•	значение recordsize;<br>
-•	какое сжатие используется;<br>
-•	какая контрольная сумма используется.<br><br><br>
+`mkdir -p /srv/share/upload` #создаем каталог для шары<br>
+`chown -R nobody:nogroup /srv/share` #устанавливаем права<br>
+`chmod 0777 /srv/share/upload`<br>
+`nano /etc/exports`<br>
+Допишем в файл:    /srv/share 192.168.216.128/32(rw,sync)<br>
+`exportfs -r` #применяем<br>
+`exportfs -s` #проверяем<br><br>
+<img width="974" height="39" alt="image" src="https://github.com/user-attachments/assets/e07a43ec-f3ff-4a13-97f0-051b5bc21736" /><br><br>
 
+3.	экспортированная директория должна автоматически монтироваться на клиенте при старте виртуальной машины. монтирование и работа NFS на клиенте должна быть организована с использованием NFSv3.<br><br>
+На клиенте:<br><br>
+`apt update && apt install nfs-common` #устанавливаем клиентскую часть NFS<br>
+`nano /etc/fstab`<br>
+Добавляем автомонтирование шары с сервера:<br>
+192.168.216.129:/srv/share/ /mnt nfs vers=3,noauto,x-systemd.automount 0 0<br>
+`systemctl daemon-reload`<br>
+`systemctl restart remote-fs.target`<br>
+`cd /mnt`<br>
+`mount | grep mnt`<br><br>
+<img width="974" height="125" alt="image" src="https://github.com/user-attachments/assets/49dc1177-8fbc-43bb-b740-e496fc806a55" /><br><br>
 
-Начальная ситуация:<br><br>
-<img width="974" height="396" alt="image" src="https://github.com/user-attachments/assets/526a9d50-7b0e-4735-b419-edb56438bb98" />
-<br><br> 
-`wget -O archive.tar.gz --no-check-certificate ‘https://drive.usercontent.google.com/download?id=1MvrcEp-WgAQe57aDEzxSRalPAwbNN1Bb&export=download'` #скачиваем предлагаемый архив<br>
-`tar -xzvf archive.tar.gz` #разархивируем<br>
-`zpool import -d zpoolexport`<br>
-`zpool import -d zpoolexport/ otus` #импортируем пул<br><br>
-Определяем:<br><br>
-Размер хранилища:<br>
-<img width="661" height="108" alt="image" src="https://github.com/user-attachments/assets/21dad3c1-f5fa-4488-9b9a-04b08666e1f2" />
-<br><br>
-Тип pool:<br>
-<img width="974" height="460" alt="image" src="https://github.com/user-attachments/assets/935965b1-1bbc-4c1c-8b06-463b0ec2c3d0" />
-<br><br> 
-Значение recordsize:<br>
-<img width="672" height="111" alt="image" src="https://github.com/user-attachments/assets/f5db7eb4-fe89-492b-bd2b-cf136f95b8bc" />
-<br><br>
-Какое сжатие используется:<br>
-<img width="728" height="105" alt="image" src="https://github.com/user-attachments/assets/15bbf1df-c64b-494e-ac80-de756b53a24c" />
-<br><br>
-Какая контрольная сумма используется:<br>
-<img width="639" height="111" alt="image" src="https://github.com/user-attachments/assets/ca5ad25e-b874-4fab-aaa0-a22efb6f1c7d" />
-<br><br>
-________________________________________________________________________________________________________________________________________________________________________________________
-<br>
-3.	Работа со снапшотами:<br>
-•	скопировать файл из удаленной директории;<br>
-•	восстановить файл локально. zfs receive;<br>
-•	найти зашифрованное сообщение в файле secret_message.<br><br>
+`reboot` #проверяем автомонтирование<br>
+`cd /mnt`<br>
+`df -hT`<br><br>
+<img width="974" height="220" alt="image" src="https://github.com/user-attachments/assets/9ca76cc6-9847-4a1d-a085-0698dfe213cb" /><br><br>
 
+`touch upload/file_from_client` #аплоадим файл от клиента<br><br>
+На сервере:<br><br>
+`showmount -a`<br><br>
+<img width="491" height="103" alt="image" src="https://github.com/user-attachments/assets/3560656a-3271-4d76-9c38-491e24308f78" /><br><br>
 
-`wget -O otus_task2.file --no-check-certificate 'https://drive.usercontent.google.com/download?id=1wgxjih8YZ-cqLqaZVa0lA3h3Y029c3oI&export=download'` #скачаем предлагаемый файл<br>
-`zfs receive otus/test@today < otus_task2.file` #восстанавливаем ФС из скачанного файла<br><br>
-<img width="974" height="34" alt="image" src="https://github.com/user-attachments/assets/34db6b76-7ac8-4eb7-bec5-d16ac775a16c" />
-<br><br>
-` find /otus/ -name "secret_message"` #ищем файл<br>
-` cat /otus/test/task1/file_mess/secret_message` <br><br>
-<img width="974" height="78" alt="image" src="https://github.com/user-attachments/assets/5c871c2b-ca86-437c-8d76-893674634397" />
+`ls /srv/share/upload/`<br><br>
+<img width="630" height="63" alt="image" src="https://github.com/user-attachments/assets/8efde958-94d2-4a9f-91bb-01a620c4cea1" /><br><br>
+
+`touch /srv/share/upload/server_secret` #"отправляем" файл клиенту<br><br>
+На клиенте:<br><br>
+`ls /mnt/upload/`<br><br>
+<img width="648" height="80" alt="image" src="https://github.com/user-attachments/assets/393542e6-79be-419f-9142-7b98ab0b4242" />
+
