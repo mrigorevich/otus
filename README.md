@@ -1,55 +1,68 @@
 # otus
 Описание домашнего задания:<br>
-•	запустить 2 виртуальных машины (сервер NFS и клиента);<br>
-•	на сервере NFS должна быть подготовлена и экспортирована директория;<br>
-•	в экспортированной директории должна быть поддиректория с именем upload с правами на запись в неё;<br>
-•	экспортированная директория должна автоматически монтироваться на клиенте при старте виртуальной машины (systemd, autofs или fstab — любым способом);<br>
-•	монтирование и работа NFS на клиенте должна быть организована с использованием NFSv3.<br><br>
-_____________________________________________________________________________________________________________________________________________<br><br>
+•	создать свой RPM (можно взять свое приложение, либо собрать, к примеру, Apache с определенными опциями);<br>
+•	создать свой репозиторий и разместить там ранее собранный RPM<br><br>
 
-1.	запустить 2 виртуальных машины (сервер NFS и клиента)<br><br>
-Запущены ВМ: otushw (192.168.216.129) и otusclient (192.168.216.128). Обе ВМ на Ubuntu 24.04<br><br>
-2.	на сервере NFS должна быть подготовлена и экспортирована директория. в экспортированной директории должна быть поддиректория с именем upload с правами на запись в неё.<br><br>
-`apt update && apt install nfs-kernel-server` #устанавливаем NFS сервер<br>
-`ss -tlnp` #проверяем запущен ли сервер по tcp:<br><br>
-<img width="974" height="147" alt="image" src="https://github.com/user-attachments/assets/cbc9edf4-863b-4b8a-bdda-68b4e183bd48" /><br><br>
 
-`mkdir -p /srv/share/upload` #создаем каталог для шары<br>
-`chown -R nobody:nogroup /srv/share` #устанавливаем права<br>
-`chmod 0777 /srv/share/upload`<br>
-`nano /etc/exports`<br>
-Допишем в файл:    /srv/share 192.168.216.128/32(rw,sync)<br>
-`exportfs -r` #применяем<br>
-`exportfs -s` #проверяем<br><br>
-<img width="974" height="39" alt="image" src="https://github.com/user-attachments/assets/e07a43ec-f3ff-4a13-97f0-051b5bc21736" /><br><br>
+Все действия производились на ВМ с CentOS 9.<br><br>
+1.<br><br>
+`yum install -y wget rpmdevtools rpm-build createrepo yum-utils cmake gcc git nano` #устанавливаем необходимые пакеты<br>
+`mkdir rpm && cd rpm`<br>
+`yumdownloader --source nginx` #загружаем source rpm пакет Nginx<br>
+`rpm -Uvh nginx*.src.rpm` #устанавливаем пакет с исходниками<br>
+`yum-builddep nginx`<br>
+`cd /root`<br>
+`git clone --recurse-submodules -j8 https://github.com/google/ngx_brotli` #качаем исходник модуля  ngx_brotli (сжатие веб-приложений)<br>
+`cd ngx_brotli/deps/brotli`<br>
+`mkdir out && cd out`<br>
+`cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF -DCMAKE_C_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_CXX_FLAGS="-Ofast -m64 -march=native -mtune=native -flto -funroll-loops -ffunction-sections -fdata-sections -Wl,--gc-sections" -DCMAKE_INSTALL_PREFIX=./installed ..` #собираем модуль ngx_brotli<br>
+`cmake --build . --config Release -j 2 --target brotlienc`<br>
+`cd /root`<br>
+`nano rpmbuild/SPECS/nginx.spec` #добавляем ngx_brotli в nginx.spec<br><br>
+<img width="678" height="641" alt="image" src="https://github.com/user-attachments/assets/1007147f-1cd4-448a-84df-b989ca1c21c1" />
+<br><br>
+`cd rpmbuild/SPECS/`<br>
+`rpmbuild -ba nginx.spec -D 'debug_package %{nil}'` #собираем rmp пакет<br><br>
+<img width="558" height="744" alt="image" src="https://github.com/user-attachments/assets/d5a3e65b-3691-4177-a302-13eeb315afa9" /><br><br>
 
-3.	экспортированная директория должна автоматически монтироваться на клиенте при старте виртуальной машины. монтирование и работа NFS на клиенте должна быть организована с использованием NFSv3.<br><br>
-На клиенте:<br><br>
-`apt update && apt install nfs-common` #устанавливаем клиентскую часть NFS<br>
-`nano /etc/fstab`<br>
-Добавляем автомонтирование шары с сервера:<br>
-192.168.216.129:/srv/share/ /mnt nfs vers=3,noauto,x-systemd.automount 0 0<br>
-`systemctl daemon-reload`<br>
-`systemctl restart remote-fs.target`<br>
-`cd /mnt`<br>
-`mount | grep mnt`<br><br>
-<img width="974" height="125" alt="image" src="https://github.com/user-attachments/assets/49dc1177-8fbc-43bb-b740-e496fc806a55" /><br><br>
+`cd ../`<br>
+`ll RPMS/x86_64/`<br><br>
+<img width="973" height="175" alt="image" src="https://github.com/user-attachments/assets/9896fa35-bc61-41a4-965d-334569ab6544" /><br><br>
 
-`reboot` #проверяем автомонтирование<br>
-`cd /mnt`<br>
-`df -hT`<br><br>
-<img width="974" height="220" alt="image" src="https://github.com/user-attachments/assets/9ca76cc6-9847-4a1d-a085-0698dfe213cb" /><br><br>
+`cp RPMS/noarch/* RPMS/x86_64/`<br>
+`cd RPMS/x86_64/`<br>
+`yum install *.rpm` #устанавливаем собранный пакет<br>
+`systemctl start nginx` #запускаем (если нужна автозагрузка, пишем systemctl enable nginx) <br>
+`systemctl status nginx` #и проверяем nginx<br><br>
 
-`touch upload/file_from_client` #аплоадим файл от клиента<br><br>
-На сервере:<br><br>
-`showmount -a`<br><br>
-<img width="491" height="103" alt="image" src="https://github.com/user-attachments/assets/3560656a-3271-4d76-9c38-491e24308f78" /><br><br>
+2.<br><br>
+`mkdir /usr/share/nginx/html/repo` #создаем каталог для репозитория<br>
+`cd ~`<br>
+`cp ~/rpmbuild/RPMS/x86_64/*.rpm /usr/share/nginx/html/repo/` #помещаем в репозиторий пакеты<br>
+`createrepo /usr/share/nginx/html/repo/` #инициализируем репозиторий<br>
+`nano /etc/nginx/nginx.conf`  #правки в конфиге Nginx для доступа в каталог репозитория<br><br>
+<img width="888" height="403" alt="image" src="https://github.com/user-attachments/assets/36cc4eee-dece-4af2-b8c7-7e03edb36b5c" />
+<br><br>
+`nginx -s reload` #перезагружаем конфиг Nginx<br>
+`curl -a http://localhost/repo/` #проверяем<br><br>
+<img width="972" height="275" alt="image" src="https://github.com/user-attachments/assets/0acf8103-6ad4-4432-8654-f0cdde3f9717" />
+<br><br>
 
-`ls /srv/share/upload/`<br><br>
-<img width="630" height="63" alt="image" src="https://github.com/user-attachments/assets/8efde958-94d2-4a9f-91bb-01a620c4cea1" /><br><br>
+`cat >> /etc/yum.repos.d/otus.repo << EOF
+[otus]
+name=otus-linux
+baseurl=http://localhost/repo
+gpgcheck=0
+enabled=1
+EOF` #пропишем созданный локальный репозиторий в системе<br><br>
 
-`touch /srv/share/upload/server_secret` #"отправляем" файл клиенту<br><br>
-На клиенте:<br><br>
-`ls /mnt/upload/`<br><br>
-<img width="648" height="80" alt="image" src="https://github.com/user-attachments/assets/393542e6-79be-419f-9142-7b98ab0b4242" />
+
+`cd /usr/share/nginx/html/repo/` #добавим пакет percona-release<br>
+`wget https://repo.percona.com/yum/percona-release-latest.noarch.rpm`<br>
+`createrepo /usr/share/nginx/html/repo/` #обновим репозиторий<br>
+`yum makecache`<br>
+`yum list | grep otus` #проверяем наличие пакета в репозитории<br><br>
+<img width="966" height="45" alt="image" src="https://github.com/user-attachments/assets/3bc81184-9148-41c1-a538-095f9a7e7a26" />
+
+ 
 
