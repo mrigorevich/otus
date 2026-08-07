@@ -1,6 +1,6 @@
 #! /bin/bash
 start=$(date '+%d/%b/%Y:%H:%M:%S') #время запуска скрипта
-log="access.log" #основной входящий файл
+log="/var/log/nginx/access.log" #основной входящий файл
 current="last.txt" #последняя обработанная строка во входящем логе
 
 lockfile="weblog.lock"
