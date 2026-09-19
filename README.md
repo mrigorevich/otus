@@ -37,5 +37,5 @@ https://drive.google.com/file/d/17MEtg20TFSjKil6ih7PvPez7jmCvo6fb/view?usp=share
 <img width="974" height="387" alt="image" src="https://github.com/user-attachments/assets/7120abc3-ea52-42d9-8666-43ee8ca8e3bc" /><br><br>
 
 Файлы:<br><br>
-nginx.yml - итоговый плейбук<br>
+[nginx.yml](https://github.com/mrigorevich/otus/blob/main/nginx.yml) - итоговый плейбук<br>
 Vagrantfile - файл стенда
