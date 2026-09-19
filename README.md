@@ -38,4 +38,4 @@ https://drive.google.com/file/d/17MEtg20TFSjKil6ih7PvPez7jmCvo6fb/view?usp=share
 
 Файлы:<br><br>
 [nginx.yml](https://github.com/mrigorevich/otus/blob/main/nginx.yml) - итоговый плейбук<br>
-Vagrantfile - файл стенда
+[Vagrantfile](https://github.com/mrigorevich/otus/blob/main/Vagrantfile) - файл стенда
