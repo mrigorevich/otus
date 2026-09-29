@@ -37,3 +37,5 @@
 `echo "user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart docker" > /etc/sudoers.d/docker-restart` # сделаем файл в каталоге sudoers.d для перезапуска docker<br>
 Проверяем, залогинившись обычным пользователем:<br><br>
 <img width="974" height="182" alt="image" src="https://github.com/user-attachments/assets/6db269cd-a6b6-44e0-bda2-946059f30de0" />
+
+Ссылка на Vagrantfile: https://github.com/mrigorevich/otus/blob/main/Vagrantfile
